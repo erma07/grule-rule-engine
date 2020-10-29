@@ -1,13 +1,13 @@
 # Grule's RETE Algorithm
 
-[Tutorial](Tutorial_en.md) | [Rule Engine](RuleEngine_en.md) | [GRL](GRL_en.md) | [RETE Algorithm](RETE_en.md) | [Functions](Function_en.md) | [Grule Events](GruleEvent_en.md) | [FAQ](FAQ_en.md)
+[Tutorial](Tutorial_en.md) | [Rule Engine](RuleEngine_en.md) | [GRL](GRL_en.md) | [RETE Algorithm](RETE_en.md) | [Functions](Function_en.md) | [FAQ](FAQ_en.md)
 
 From Wikipedia : The Rete algorithm (/ˈriːtiː/ REE-tee, /ˈreɪtiː/ RAY-tee, rarely /ˈriːt/ REET, /rɛˈteɪ/ reh-TAY) is a pattern matching algorithm for implementing rule-based systems. The algorithm was developed to efficiently apply many rules or patterns to many objects, or facts, in a knowledge base. It is used to determine which of the system's rules should fire based on its data store, its facts.
 
 Some form of the RETE algorithm was implemented in `grule-rule-engine` starting from version `1.1.0`.
 It replaces the __Naive__ approach when evaluating rules to add to `ConflictSet`.
 
-`ExpressionAtom` in the DRL are compiled and will not be duplicated within the working memory of the engine.
+`ExpressionAtom` in the GRL are compiled and will not be duplicated within the working memory of the engine.
 This increased the engine performance significantly if you have many rules defined with lots of duplicated expressions
 or lots of heavy function/method calls.
 
@@ -51,7 +51,7 @@ dctx := context.NewDataContext()
 err := dctx.Add("Fact", f)
 ```
 
-And we have DRL like ...
+And we have GRL like ...
 
 ```go
 rule ... {
@@ -83,7 +83,7 @@ rule ... {
 }
 ```
 
-Executing the DRL above might "kill" the engine because when it tries to choose what rules to execute,
+Executing the GRL above might "kill" the engine because when it tries to choose what rules to execute,
 the engine will call the `Fact.VeryHeavyAndLongFunction` function in every rule's `when` scope.
 
 Thus, instead of executing the `Fact.VeryHeavyAndLongFunction` while evaluating each
@@ -107,20 +107,20 @@ rule ... {
 Grule will try to remember all of the `Expression` defined within rule's `when` scope of all rules
 in the KnowledgeBase.
 
-First, It will try its best to make sure none of the `v` AST (Abstract Syntax Tree) node get duplicated.
+First, It will try its best to make sure none of the AST (Abstract Syntax Tree) node get duplicated.
 
 Second, each of this AST node can only be evaluated once, until it's relevant `variable` get changed. For example :
 
 Boolean Expression :
 
-```text
+```Shell
     when
     Fact.A == Fact.B + Fact.Func(Fact.C) - 20
 ```
 
 This expression will be broken down into the following Expressions.
 
-```text
+```Shell
 Expression "Fact.A" --> A variable
 Expression "Fact.B" --> A variable
 Expression "Fact.C" --> A variable
@@ -136,7 +136,7 @@ as their remembered value will immediately returned.
 
 If one of this Variable got altered inside the rule's `then` scope, for example
 
-```text
+```Shell
     then
         Fact.B = Fact.A * 20
 ```
@@ -144,7 +144,7 @@ If one of this Variable got altered inside the rule's `then` scope, for example
 We can see `Fact.B` value is changed, then all Expression containing `Fact.B` will
 be removed from Working memory:
 
-```text
+```Shell
 Expression "Fact.B"
 Expression "Fact.B + Fact.Func(Fact.C)" --> A math operation contains 2 variable; Fact.B and Fact.C
 Expression "(Fact.B + Fact.Func(Fact.C))" - 20 -- A math operation also contains 2 variable. 

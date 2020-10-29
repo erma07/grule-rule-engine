@@ -2,18 +2,14 @@ package pkg
 
 import (
 	"fmt"
-	"github.com/bmatcuk/doublestar"
-	"github.com/juju/errors"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/src-d/go-billy.v4"
-	"gopkg.in/src-d/go-billy.v4/memfs"
-	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
-	http2 "gopkg.in/src-d/go-git.v4/plumbing/transport/http"
-	"gopkg.in/src-d/go-git.v4/storage/memory"
+	"github.com/hyperjumptech/grule-rule-engine/logger"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
+
+	"github.com/bmatcuk/doublestar"
+	"gopkg.in/src-d/go-billy.v4"
 )
 
 // ResouceBundle is a helper struct to help load multiple resource at once.
@@ -97,7 +93,7 @@ func (bundle *FileResourceBundle) MustLoad() []Resource {
 }
 
 func (bundle *FileResourceBundle) loadPath(path string) ([]Resource, error) {
-	logrus.Tracef("Enter directory %s", path)
+	logger.Log.Tracef("Enter directory %s", path)
 
 	finfos, err := ioutil.ReadDir(path)
 
@@ -107,9 +103,7 @@ func (bundle *FileResourceBundle) loadPath(path string) ([]Resource, error) {
 	ret := make([]Resource, 0)
 	for _, finfo := range finfos {
 		fulPath := fmt.Sprintf("%s/%s", path, finfo.Name())
-		if path == "/" && finfo.IsDir() {
-			fulPath = fmt.Sprintf("/%s", finfo.Name())
-		}
+		fulPath, _ = filepath.Abs(fulPath)
 		if finfo.IsDir() {
 			gres, err := bundle.loadPath(fulPath)
 			if err != nil {
@@ -118,12 +112,12 @@ func (bundle *FileResourceBundle) loadPath(path string) ([]Resource, error) {
 			ret = append(ret, gres...)
 		} else {
 			for _, pattern := range bundle.PathPattern {
-				matched, err := doublestar.Match(pattern, fulPath)
+				matched, err := doublestar.PathMatch(pattern, fulPath)
 				if err != nil {
 					return nil, err
 				}
 				if matched {
-					logrus.Debugf("Loading file %s", fulPath)
+					logger.Log.Debugf("Loading file %s", fulPath)
 					bytes, err := ioutil.ReadFile(fulPath)
 					if err != nil {
 						return nil, err
@@ -157,7 +151,7 @@ func (res *FileResource) Load() ([]byte, error) {
 	}
 	data, err := ioutil.ReadFile(res.Path)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	res.Bytes = data
 	return res.Bytes, nil
@@ -218,12 +212,12 @@ func (res *URLResource) Load() ([]byte, error) {
 	}
 	resp, err := http.Get(res.URL)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	res.Bytes = data
 	return res.Bytes, nil
@@ -257,48 +251,8 @@ type GITResourceBundle struct {
 	PathPattern []string
 }
 
-// Load will load the file from your git repository
-func (bundle *GITResourceBundle) Load() ([]Resource, error) {
-	fs := memfs.New()
-	CloneOpts := &git.CloneOptions{}
-	if len(bundle.URL) == 0 {
-		return nil, fmt.Errorf("GIT URL is not specified")
-	}
-	CloneOpts.URL = bundle.URL
-
-	if len(bundle.RefName) == 0 {
-		CloneOpts.ReferenceName = plumbing.ReferenceName("refs/heads/master")
-	} else {
-		CloneOpts.ReferenceName = plumbing.ReferenceName(bundle.RefName)
-	}
-
-	if len(bundle.Remote) == 0 {
-		CloneOpts.RemoteName = "origin"
-	} else {
-		CloneOpts.RemoteName = bundle.Remote
-	}
-
-	if len(bundle.PathPattern) == 0 {
-		return nil, fmt.Errorf("no path pattern specified")
-	}
-
-	if len(bundle.User) != 0 {
-		CloneOpts.Auth = &http2.BasicAuth{
-			Username: bundle.User,
-			Password: bundle.Password,
-		}
-	}
-
-	_, err := git.Clone(memory.NewStorage(), fs, CloneOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	return bundle.loadPath(bundle.URL, "/", fs)
-}
-
 func (bundle *GITResourceBundle) loadPath(url, path string, fs billy.Filesystem) ([]Resource, error) {
-	logrus.Tracef("Enter directory %s", path)
+	logger.Log.Tracef("Enter directory %s", path)
 	finfos, err := fs.ReadDir(path)
 	if err != nil {
 		return nil, err
@@ -322,7 +276,7 @@ func (bundle *GITResourceBundle) loadPath(url, path string, fs billy.Filesystem)
 					return nil, err
 				}
 				if matched {
-					logrus.Debugf("Loading git file %s", fulPath)
+					logger.Log.Debugf("Loading git file %s", fulPath)
 					f, err := fs.Open(fulPath)
 					if err != nil {
 						return nil, err
